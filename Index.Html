@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contatti Protetti</title>
+
+    <!-- Link al Manifest per l'installazione (file che devi avere nella cartella) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007bff">
+
+    <style>
+        /* Stili generali */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Stili per la schermata di blocco */
+        #lock-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.3s ease;
+        }
+        #lock-screen .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        #lock-screen h1 {
+            margin-top: 0;
+        }
+        
+        /* Stili per il contenuto principale (nascosto all'inizio) */
+        #main-content {
+            display: none; /* Nascosto di default */
+        }
+        #form-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        input[type="text"], input[type="tel"], textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #dddfe2;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        #saved-entries-list {
+            text-align: left;
+        }
+        .entry {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            padding-right: 90px; /* Aggiunge spazio per i bottoni */
+        }
+        .entry h3 { margin: 0 0 10px 0; }
+        .entry p { margin: 0 0 5px 0; }
+        
+        /* Stili per i bottoni delle voci */
+        .delete-btn, .sms-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        .delete-btn {
+            right: 10px;
+            background: #ff4d4d;
+        }
+        .sms-btn {
+            right: 55px;
+            background: #007bff;
+        }
+        
+        /* Stili per i bottoni e messaggi */
+        #auth-button {
+            display: inline-block;
+            width: 80%;
+            padding: 15px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 8px;
+            background-color: #007bff;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #save-entry-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            background-color: #007bff;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #auth-status, #status-message {
+            margin-top: 15px;
+            min-height: 20px;
+            color: #606770;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. SCHERMATA DI BLOCCO (visibile all'avvio) -->
+    <div id="lock-screen">
+        <div class="container">
+            <h1>🔒 App Protetta</h1>
+            <p>Usa la tua impronta per sbloccare.</p>
+            <button id="auth-button">Sblocca</button>
+            <div id="auth-status">In attesa di autenticazione...</div>
+        </div>
+    </div>
+
+    <!-- 2. CONTENUTO PRINCIPALE DELL'APP (nascosto) -->
+    <div id="main-content">
+        <div class="container">
+            <h1>📂 Archivio Offline</h1>
+            
+            <div id="form-container">
+                <h3>Nuova Voce</h3>
+                <input type="text" id="entry-title" placeholder="Titolo (es. Mario Rossi)">
+                <textarea id="entry-message" rows="3" placeholder="Messaggio o nota"></textarea>
+                <input type="tel" id="entry-phone" placeholder="Numero di telefono">
+                <button id="save-entry-btn">Salva Voce</button>
+                <div id="status-message"></div>
+            </div>
+
+            <h2>Voci Salvate</h2>
+            <div id="saved-entries-list">
+                <!-- Le voci salvate verranno inserite qui dal JavaScript -->
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 3. LOGICA JAVASCRIPT PER L'AUTENTICAZIONE E IL SALVATAGGIO DATI -->
+    <script>
+        // Elementi dell'interfaccia
+        const lockScreen = document.getElementById('lock-screen');
+        const mainContent = document.getElementById('main-content');
+        const authButton = document.getElementById('auth-button');
+        const authStatus = document.getElementById('auth-status');
+        
+        const saveEntryBtn = document.getElementById('save-entry-btn');
+        const entryTitle = document.getElementById('entry-title');
+        const entryMessage = document.getElementById('entry-message');
+        const entryPhone = document.getElementById('entry-phone');
+        const savedEntriesList = document.getElementById('saved-entries-list');
+        const statusMessage = document.getElementById('status-message');
+
+        // Funzione per convertire stringhe/buffer per l'API WebAuthn
+        const bufferDecode = (value) => new Uint8Array(atob(value).split('').map(c => c.charCodeAt(0)));
+        const bufferEncode = (value) => btoa(String.fromCharCode.apply(null, new Uint8Array(value)));
+
+        // Funzione per sbloccare l'app
+        function unlockApp() {
+            lockScreen.style.opacity = '0';
+            setTimeout(() => { lockScreen.style.display = 'none'; }, 300);
+            mainContent.style.display = 'block';
+            loadEntries(); // Carica le voci salvate dopo lo sblocco
+        }
+
+        // --- LOGICA PER GESTIRE LE VOCI ---
+        
+        function loadEntries() {
+            const entries = JSON.parse(localStorage.getItem('secureEntries') || '[]');
+            renderEntries(entries);
+        }
+
+        function renderEntries(entries) {
+            savedEntriesList.innerHTML = '';
+            if (entries.length === 0) {
+                savedEntriesList.innerHTML = '<p style="text-align: center;">Nessuna voce salvata.</p>';
+                return;
+            }
+            entries.forEach(entry => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'entry';
+                const encodedMessage = encodeURIComponent(entry.message);
+                const smsLink = `sms:${entry.phone}?body=${encodedMessage}`;
+                entryDiv.innerHTML = `
+                    <h3>${entry.title}</h3>
+                    <p><strong>Nota:</strong> ${entry.message}</p>
+                    <p><strong>Tel:</strong> ${entry.phone}</p>
+                    ${entry.phone ? `<a href="${smsLink}" class="sms-btn">✉️</a>` : ''}
+                    <button class="delete-btn" data-id="${entry.id}">X</button>
+                `;
+                savedEntriesList.appendChild(entryDiv);
+            });
+        }
+        
+        saveEntryBtn.addEventListener('click', () => {
+            const title = entryTitle.value.trim();
+            const message = entryMessage.value.trim();
+            const phone = entryPhone.value.trim();
+
+            if (!title) {
+                statusMessage.textContent = 'Il titolo è obbligatorio.';
+                setTimeout(() => { statusMessage.textContent = ''; }, 3000);
+                return;
+            }
+
+            const entries = JSON.parse(localStorage.getItem('secureEntries') || '[]');
+            const newEntry = { id: Date.now(), title, message, phone };
+            entries.push(newEntry);
+            localStorage.setItem('secureEntries', JSON.stringify(entries));
+            
+            entryTitle.value = '';
+            entryMessage.value = '';
+            entryPhone.value = '';
+            statusMessage.textContent = 'Voce salvata con successo!';
+            setTimeout(() => { statusMessage.textContent = ''; }, 3000);
+            loadEntries();
+        });
+
+        savedEntriesList.addEventListener('click', (event) => {
+            if (event.target.classList.contains('delete-btn')) {
+                const entryId = Number(event.target.getAttribute('data-id'));
+                let entries = JSON.parse(localStorage.getItem('secureEntries') || '[]');
+                entries = entries.filter(entry => entry.id !== entryId);
+                localStorage.setItem('secureEntries', JSON.stringify(entries));
+                loadEntries();
+            }
+        });
+
+        // --- FINE LOGICA VOCI ---
+
+        // --- GESTIONE AUTENTICAZIONE ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!navigator.credentials || !navigator.credentials.create) {
+                authStatus.textContent = "Il tuo browser non supporta l'autenticazione biometrica.";
+                authButton.disabled = true;
+                return;
+            }
+            const isRegistered = localStorage.getItem('biometricRegistered');
+            authButton.textContent = isRegistered ? 'Sblocca con impronta' : 'Registra impronta';
+            authButton.onclick = isRegistered ? authenticate : register;
+        });
+
+        async function register() {
+            try {
+                authStatus.textContent = 'Prepara il sensore...';
+                const userId = crypto.randomUUID();
+                localStorage.setItem('biometricUserId', userId);
+                const credential = await navigator.credentials.create({
+                    publicKey: {
+                        challenge: crypto.getRandomValues(new Uint8Array(32)),
+                        rp: { name: "App Protetta Locale" },
+                        user: { id: new TextEncoder().encode(userId), name: "utente@locale", displayName: "Utente Locale" },
+                        pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+                        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                        timeout: 60000,
+                    }
+                });
+                localStorage.setItem('biometricCredentialId', bufferEncode(credential.rawId));
+                localStorage.setItem('biometricRegistered', 'true');
+                authStatus.textContent = 'Registrazione completata!';
+                unlockApp();
+            } catch (err) {
+                console.error("Registrazione fallita:", err);
+                authStatus.textContent = 'Registrazione fallita. Riprova.';
+            }
+        }
+
+        async function authenticate() {
+            try {
+                authStatus.textContent = 'In attesa di impronta...';
+                const credentialId = localStorage.getItem('biometricCredentialId');
+                if (!credentialId) {
+                    authStatus.textContent = 'Nessuna credenziale registrata. Per favore registra prima.';
+                    return;
+                }
+                const credential = await navigator.credentials.get({
+                    publicKey: {
+                        challenge: crypto.getRandomValues(new Uint8Array(32)),
+                        allowCredentials: [{ type: 'public-key', id: bufferDecode(credentialId), transports: ['internal'] }],
+                        userVerification: 'required',
+                        timeout: 60000,
+                    }
+                });
+                if (credential) {
+                    authStatus.textContent = 'Sbloccato!';
+                    unlockApp();
+                }
+            } catch (err) {
+                console.error("Autenticazione fallita:", err);
+                authStatus.textContent = 'Autenticazione fallita. Riprova.';
+            }
+        }
+        // --- FINE GESTIONE AUTENTICAZIONE ---
+
+        // Registra il Service Worker per il funzionamento offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                 .then(registration => {
+                        console.log('Service Worker registrato con successo!');
+                    })
+                    .catch(err => {
+                        console.log('Registrazione del Service Worker fallita: ', err);
+                    });
+            });
+        }
+    </script>
+
+</body>
+</html>
